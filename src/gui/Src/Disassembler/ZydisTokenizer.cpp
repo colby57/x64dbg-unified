@@ -7,6 +7,7 @@
 ZydisTokenizer::ZydisTokenizer(int maxModuleLength, Architecture* architecture)
     : mMaxModuleLength(maxModuleLength),
       mZydis(architecture->disasm64()),
+      mDisasm64(architecture->disasm64()),
       mArchitecture(architecture)
 {
 }
@@ -132,6 +133,12 @@ void ZydisTokenizer::UpdateStringPool()
 
 bool ZydisTokenizer::Tokenize(duint addr, const unsigned char* data, int datasize, InstructionToken & instruction)
 {
+    const bool disasm64 = mArchitecture->disasm64(addr);
+    if(disasm64 != mDisasm64)
+    {
+        mDisasm64 = disasm64;
+        mZydis.Reset(disasm64);
+    }
     mInst = InstructionToken();
 
     mSuccess = mZydis.DisassembleSafe(addr, data, datasize);
@@ -249,7 +256,8 @@ void ZydisTokenizer::UpdateConfig()
 
 void ZydisTokenizer::UpdateArchitecture()
 {
-    mZydis.Reset(mArchitecture->disasm64());
+    mDisasm64 = mArchitecture->disasm64();
+    mZydis.Reset(mDisasm64);
 }
 
 void ZydisTokenizer::SetConfig(bool bUppercase, bool bTabbedMnemonic, bool bArgumentSpaces, bool bHidePointerSizes, bool bHideNormalSegments, bool bMemorySpaces, bool bNoHighlightOperands, bool bNoCurrentModuleText, DisasmValueNotationType ValueNotation)

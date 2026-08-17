@@ -285,6 +285,10 @@ typedef struct DBGFUNCTIONS_
     bool (*BpSetFieldText)(const BP_REF* ref, BP_FIELD field, const char* value);
     // Escapes argument contents for insertion between double quotes in a debugger command.
     bool (*CommandEscape)(const char* argument, char* result, size_t resultSize);
+    // Runtime architecture of the currently stopped thread (ExecutionMode).
+    unsigned char (*GetActiveExecutionMode)();
+    size_t(*GetTargetPointerSize)();
+    unsigned char (*GetExecutionModeAt)(duint address);
 } DBGFUNCTIONS;
 
 #ifdef __cplusplus

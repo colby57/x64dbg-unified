@@ -85,35 +85,38 @@ void RegistersView::InitMappings()
     mRegisterPlaces.clear();
     mRegisterRelativePlaces.clear();
     int offset = 0;
+    const int pointerHexWidth = mMode64 ? 16 : 8;
 
     /* Register_Position is a struct definition the position
      *
      * (line , start, labelwidth, valuesize )
      */
 #if defined(_WIN64) || defined(__x86_64__)
+    if(mMode64)
+    {
     mRegisterMapping.insert(CAX, "RAX");
-    mRegisterPlaces.insert(CAX, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CAX, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CAX, Register_Relative_Position(UNKNOWN, CBX));
     mRegisterMapping.insert(CBX, "RBX");
-    mRegisterPlaces.insert(CBX, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CBX, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CBX, Register_Relative_Position(CAX, CCX));
     mRegisterMapping.insert(CCX, "RCX");
-    mRegisterPlaces.insert(CCX, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CCX, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CCX, Register_Relative_Position(CBX, CDX));
     mRegisterMapping.insert(CDX, "RDX");
-    mRegisterPlaces.insert(CDX, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CDX, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CDX, Register_Relative_Position(CCX, CBP));
     mRegisterMapping.insert(CBP, "RBP");
-    mRegisterPlaces.insert(CBP, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CBP, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CBP, Register_Relative_Position(CDX, CSP));
     mRegisterMapping.insert(CSP, "RSP");
-    mRegisterPlaces.insert(CSP, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CSP, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CSP, Register_Relative_Position(CBP, CSI));
     mRegisterMapping.insert(CSI, "RSI");
-    mRegisterPlaces.insert(CSI, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CSI, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CSI, Register_Relative_Position(CSP, CDI));
     mRegisterMapping.insert(CDI, "RDI");
-    mRegisterPlaces.insert(CDI, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CDI, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CDI, Register_Relative_Position(CSI, R8));
 
     offset++;
@@ -146,52 +149,55 @@ void RegistersView::InitMappings()
     offset++;
 
     mRegisterMapping.insert(CIP, "RIP");
-    mRegisterPlaces.insert(CIP, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CIP, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CIP, Register_Relative_Position(R15, EFLAGS));
 
     offset++;
 
     mRegisterMapping.insert(EFLAGS, "RFLAGS");
-    mRegisterPlaces.insert(EFLAGS, Register_Position(offset++, 0, 9, sizeof(duint) * 2));
+    mRegisterPlaces.insert(EFLAGS, Register_Position(offset++, 0, 9, pointerHexWidth));
     mRegisterRelativePlaces.insert(EFLAGS, Register_Relative_Position(CIP, ZF));
-#else //x86-32
+    }
+    else
+#endif
+    {
     mRegisterMapping.insert(CAX, "EAX");
-    mRegisterPlaces.insert(CAX, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CAX, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CAX, Register_Relative_Position(UNKNOWN, CBX));
     mRegisterMapping.insert(CBX, "EBX");
-    mRegisterPlaces.insert(CBX, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CBX, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CBX, Register_Relative_Position(CAX, CCX));
     mRegisterMapping.insert(CCX, "ECX");
-    mRegisterPlaces.insert(CCX, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CCX, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CCX, Register_Relative_Position(CBX, CDX));
     mRegisterMapping.insert(CDX, "EDX");
-    mRegisterPlaces.insert(CDX, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CDX, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CDX, Register_Relative_Position(CCX, CBP));
     mRegisterMapping.insert(CBP, "EBP");
-    mRegisterPlaces.insert(CBP, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CBP, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CBP, Register_Relative_Position(CDX, CSP));
     mRegisterMapping.insert(CSP, "ESP");
-    mRegisterPlaces.insert(CSP, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CSP, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CSP, Register_Relative_Position(CBP, CSI));
     mRegisterMapping.insert(CSI, "ESI");
-    mRegisterPlaces.insert(CSI, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CSI, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CSI, Register_Relative_Position(CSP, CDI));
     mRegisterMapping.insert(CDI, "EDI");
-    mRegisterPlaces.insert(CDI, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CDI, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CDI, Register_Relative_Position(CSI, CIP));
 
     offset++;
 
     mRegisterMapping.insert(CIP, "EIP");
-    mRegisterPlaces.insert(CIP, Register_Position(offset++, 0, 6, sizeof(duint) * 2));
+    mRegisterPlaces.insert(CIP, Register_Position(offset++, 0, 6, pointerHexWidth));
     mRegisterRelativePlaces.insert(CIP, Register_Relative_Position(CDI, EFLAGS));
 
     offset++;
 
     mRegisterMapping.insert(EFLAGS, "EFLAGS");
-    mRegisterPlaces.insert(EFLAGS, Register_Position(offset++, 0, 9, sizeof(duint) * 2));
+    mRegisterPlaces.insert(EFLAGS, Register_Position(offset++, 0, 9, pointerHexWidth));
     mRegisterRelativePlaces.insert(EFLAGS, Register_Relative_Position(CIP, ZF));
-#endif
+    }
 
     mRegisterMapping.insert(ZF, "ZF");
     mRegisterPlaces.insert(ZF, Register_Position(offset, 0, 3, 1));
@@ -729,21 +735,21 @@ void RegistersView::InitMappings()
     }
 
     mRegisterMapping.insert(DR0, "DR0");
-    mRegisterPlaces.insert(DR0, Register_Position(offset++, 0, 4, sizeof(duint) * 2));
+    mRegisterPlaces.insert(DR0, Register_Position(offset++, 0, 4, pointerHexWidth));
     mRegisterMapping.insert(DR1, "DR1");
-    mRegisterPlaces.insert(DR1, Register_Position(offset++, 0, 4, sizeof(duint) * 2));
+    mRegisterPlaces.insert(DR1, Register_Position(offset++, 0, 4, pointerHexWidth));
     mRegisterRelativePlaces.insert(DR1, Register_Relative_Position(DR0, DR2));
     mRegisterMapping.insert(DR2, "DR2");
-    mRegisterPlaces.insert(DR2, Register_Position(offset++, 0, 4, sizeof(duint) * 2));
+    mRegisterPlaces.insert(DR2, Register_Position(offset++, 0, 4, pointerHexWidth));
     mRegisterRelativePlaces.insert(DR2, Register_Relative_Position(DR1, DR3));
     mRegisterMapping.insert(DR3, "DR3");
-    mRegisterPlaces.insert(DR3, Register_Position(offset++, 0, 4, sizeof(duint) * 2));
+    mRegisterPlaces.insert(DR3, Register_Position(offset++, 0, 4, pointerHexWidth));
     mRegisterRelativePlaces.insert(DR3, Register_Relative_Position(DR2, DR6));
     mRegisterMapping.insert(DR6, "DR6");
-    mRegisterPlaces.insert(DR6, Register_Position(offset++, 0, 4, sizeof(duint) * 2));
+    mRegisterPlaces.insert(DR6, Register_Position(offset++, 0, 4, pointerHexWidth));
     mRegisterRelativePlaces.insert(DR6, Register_Relative_Position(DR3, DR7));
     mRegisterMapping.insert(DR7, "DR7");
-    mRegisterPlaces.insert(DR7, Register_Position(offset++, 0, 4, sizeof(duint) * 2));
+    mRegisterPlaces.insert(DR7, Register_Position(offset++, 0, 4, pointerHexWidth));
     mRegisterRelativePlaces.insert(DR7, Register_Relative_Position(DR6, UNKNOWN));
 
     mRowsNeeded = offset + 1;
@@ -1014,6 +1020,7 @@ RegistersView::RegistersView(QWidget* parent) : QScrollArea(parent), mVScrollOff
     mAVX512RegistersShown = isAVX512Supported();
     mXMMModeYMMOnly = !isAVX512Supported();
     isActive = false;
+    mMode64 = ArchValue(false, true);
 
     // general purposes register (we allow the user to modify the value)
     mGPR.insert(CAX);
@@ -1541,7 +1548,7 @@ RegistersView::RegistersView(QWidget* parent) : QScrollArea(parent), mVScrollOff
     mRegisterUpdates.clear();
 
     mButtonHeight = 0;
-    yTopSpacing = 4; //set top spacing (in pixels)
+    yTopSpacing = mRowHeight + 4; // reserve a row for the runtime mode indicator
 
     this->setMouseTracking(true);
     setAlignment(Qt::AlignLeft | Qt::AlignTop);
@@ -1952,6 +1959,9 @@ void RegistersView::paintRegisters(QPainter* p, const QRect & clip)
 
     if(!isActive)
         return;
+
+    p->setPen(ConfigColor("RegistersLabelColor"));
+    p->drawText(mCharWidth, mRowHeight, mMode64 ? tr("Execution mode: x64") : tr("Execution mode: x86"));
 
     // Iterate all registers
     for(auto itr = mRegisterMapping.begin(); itr != mRegisterMapping.end(); itr++)
@@ -2989,7 +2999,7 @@ size_t RegistersView::GetSizeRegister(const REGISTER_NAME reg_name)
     size_t size;
 
     if(mUINTDISPLAY.contains(reg_name))
-        size = sizeof(duint);
+        size = mMode64 ? sizeof(duint) : sizeof(uint32_t);
     else if(mUSHORTDISPLAY.contains(reg_name) || mFIELDVALUE.contains(reg_name))
         size = sizeof(unsigned short);
     else if(mDWORDDISPLAY.contains(reg_name))
@@ -3390,6 +3400,16 @@ char* RegistersView::registerValue(const REGDUMP_EXTENDED* regd, const REGISTER_
 void RegistersView::setRegisters(const REGDUMP* reg)
 {
     isActive = true;
+    const bool mode64 = Bridge::getArchitecture()->disasm64(reg->regcontext.cip);
+    if(mode64 != mMode64)
+    {
+        mMode64 = mode64;
+        memset(&mRegDumpStruct, 0, sizeof(mRegDumpStruct));
+        memset(&mCipRegDumpStruct, 0, sizeof(mCipRegDumpStruct));
+        mRegisterUpdates.clear();
+        InitMappings();
+        updateCanvasSize();
+    }
     auto converted = expandContext(reg);
     if(mCip != reg->regcontext.cip)
     {
@@ -3420,6 +3440,16 @@ void RegistersView::setRegisters(const REGDUMP* reg)
 void RegistersView::setRegisters(const REGDUMP_AVX512* reg)
 {
     isActive = true;
+    const bool mode64 = Bridge::getArchitecture()->disasm64(reg->regcontext.cip);
+    if(mode64 != mMode64)
+    {
+        mMode64 = mode64;
+        memset(&mRegDumpStruct, 0, sizeof(mRegDumpStruct));
+        memset(&mCipRegDumpStruct, 0, sizeof(mCipRegDumpStruct));
+        mRegisterUpdates.clear();
+        InitMappings();
+        updateCanvasSize();
+    }
     auto converted = expandContext(reg);
     if(mCip != reg->regcontext.cip)
     {

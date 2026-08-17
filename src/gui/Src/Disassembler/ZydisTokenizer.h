@@ -183,6 +183,7 @@ public:
 private:
     Architecture* mArchitecture;
     Zydis mZydis;
+    bool mDisasm64;
     bool mSuccess = false;
     bool mIsNop = false;
     InstructionToken mInst;

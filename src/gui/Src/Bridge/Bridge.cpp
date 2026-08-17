@@ -15,14 +15,41 @@ static Bridge* mBridge;
 
 class BridgeArchitecture : public Architecture
 {
-    bool disasm64() const override
+    bool disasm64(duint address = 0) const override
     {
+        const auto functions = DbgFunctions();
+        if(DbgIsDebugging() && mBridge != nullptr && address == mBridge->mLastCip && functions != nullptr && functions->GetActiveExecutionMode != nullptr)
+        {
+            const auto mode = functions->GetActiveExecutionMode();
+            if(mode != 0xFF)
+                return mode == 1;
+        }
+        if(functions != nullptr && functions->GetExecutionModeAt != nullptr && address != 0)
+        {
+            const auto mode = functions->GetExecutionModeAt(address);
+            if(mode != 0xFF)
+                return mode == 1;
+        }
+        if(DbgIsDebugging() && functions != nullptr && functions->GetActiveExecutionMode != nullptr)
+        {
+            const auto mode = functions->GetActiveExecutionMode();
+            if(mode != 0xFF)
+                return mode == 1;
+        }
         return ArchValue(false, true);
     }
 
     bool addr64() const override
     {
         return ArchValue(false, true);
+    }
+
+    size_t pointerSize() const override
+    {
+        const auto functions = DbgFunctions();
+        if(DbgIsDebugging() && functions != nullptr && functions->GetTargetPointerSize != nullptr)
+            return functions->GetTargetPointerSize();
+        return ArchValue(4, 8);
     }
 } mArch;
 

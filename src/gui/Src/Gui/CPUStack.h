@@ -58,12 +58,17 @@ public slots:
     void copyCommentsColumnSlot();
 
 private:
+    void configurePointerColumn(size_t pointerSize);
     duint mCsp = 0;
+    size_t mPointerSize = 0;
     bool bStackFrozen = false;
 
     QAction* mFreezeStack;
-    QAction* mFollowStack;
-    QAction* mFollowDisasm;
+    QAction* mCopyPointer = nullptr;
+    QAction* mGotoCsp = nullptr;
+    QAction* mGotoCbp = nullptr;
+    QAction* mFollowStack = nullptr;
+    QAction* mFollowDisasm = nullptr;
     QMenu* mPluginMenu;
 
     GotoDialog* mGoto;

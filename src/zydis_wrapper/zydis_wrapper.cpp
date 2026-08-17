@@ -71,7 +71,11 @@ void Zydis::Reset(bool disasm64)
     if(disasm64)
         ZydisDecoderInit(&mDecoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64);
     else
+#ifdef _WIN64
+        ZydisDecoderInit(&mDecoder, ZYDIS_MACHINE_MODE_LONG_COMPAT_32, ZYDIS_STACK_WIDTH_32);
+#else
         ZydisDecoderInit(&mDecoder, ZYDIS_MACHINE_MODE_LEGACY_32, ZYDIS_STACK_WIDTH_32);
+#endif
 }
 
 bool Zydis::Disassemble(uint64_t addr, const unsigned char data[MAX_DISASM_BUFFER])

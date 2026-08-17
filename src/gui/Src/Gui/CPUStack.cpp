@@ -14,32 +14,9 @@ CPUStack::CPUStack(CPUMultiDump* multiDump, QWidget* parent)
 {
     setWindowTitle("Stack");
     setShowHeader(false);
-    int charwidth = getCharWidth();
-    ColumnDescriptor colDesc;
-    DataDescriptor dDesc;
     mMultiDump = multiDump;
-
     mForceColumn = 1;
-
-    colDesc.isData = true; //void*
-    colDesc.itemCount = 1;
-    colDesc.separator = 0;
-#ifdef _WIN64
-    colDesc.data.itemSize = Qword;
-    colDesc.data.qwordMode = HexQword;
-#else
-    colDesc.data.itemSize = Dword;
-    colDesc.data.dwordMode = HexDword;
-#endif
-    appendDescriptor(10 + charwidth * 2 * sizeof(duint), "void*", false, colDesc);
-
-    colDesc.isData = false; //comments
-    colDesc.itemCount = 0;
-    colDesc.separator = 0;
-    dDesc.itemSize = Byte;
-    dDesc.byteMode = AsciiByte;
-    colDesc.data = dDesc;
-    appendDescriptor(2000, tr("Comments"), false, colDesc);
+    configurePointerColumn(mArchitecture->pointerSize());
 
     setupContextMenu();
 
@@ -56,6 +33,53 @@ CPUStack::CPUStack(CPUMultiDump* multiDump, QWidget* parent)
     connect(this, SIGNAL(selectionUpdated()), this, SLOT(selectionUpdatedSlot()));
 
     Initialize();
+}
+
+void CPUStack::configurePointerColumn(size_t pointerSize)
+{
+    if(pointerSize != 4 && pointerSize != 8)
+        pointerSize = sizeof(duint);
+    if(mPointerSize == pointerSize && !mDescriptor.empty())
+        return;
+
+    mPointerSize = pointerSize;
+    ColumnDescriptor pointerDescriptor;
+    pointerDescriptor.isData = true;
+    pointerDescriptor.itemCount = 1;
+    pointerDescriptor.separator = 0;
+    if(pointerSize == 4)
+    {
+        pointerDescriptor.data.itemSize = Dword;
+        pointerDescriptor.data.dwordMode = HexDword;
+    }
+    else
+    {
+        pointerDescriptor.data.itemSize = Qword;
+        pointerDescriptor.data.qwordMode = HexQword;
+    }
+    appendResetDescriptor(10 + getCharWidth() * 2 * int(pointerSize), pointerSize == 4 ? "DWORD" : "QWORD", false, pointerDescriptor);
+
+    ColumnDescriptor commentDescriptor;
+    commentDescriptor.isData = false;
+    commentDescriptor.itemCount = 0;
+    commentDescriptor.separator = 0;
+    commentDescriptor.data.itemSize = Byte;
+    commentDescriptor.data.byteMode = AsciiByte;
+    appendDescriptor(2000, tr("Comments"), false, commentDescriptor);
+
+    if(mCopyPointer != nullptr)
+        mCopyPointer->setText(pointerSize == 4 ? tr("&DWORD") : tr("&QWORD"));
+    if(mGotoCsp != nullptr)
+        mGotoCsp->setText(pointerSize == 4 ? tr("Follow E&SP") : tr("Follow R&SP"));
+    if(mGotoCbp != nullptr)
+        mGotoCbp->setText(pointerSize == 4 ? tr("Follow E&BP") : tr("Follow R&BP"));
+    if(mFollowStack != nullptr)
+        mFollowStack->setText(pointerSize == 4 ? tr("Follow DWORD in &Stack") : tr("Follow QWORD in &Stack"));
+    if(mFollowDisasm != nullptr)
+    {
+        mFollowDisasm->setIcon(DIcon(pointerSize == 4 ? "processor32" : "processor64"));
+        mFollowDisasm->setText(pointerSize == 4 ? tr("&Follow DWORD in Disassembler") : tr("&Follow QWORD in Disassembler"));
+    }
 }
 
 void CPUStack::updateColors()
@@ -91,7 +115,7 @@ void CPUStack::setupContextMenu()
     //Realign
     mMenuBuilder->addAction(makeAction(DIcon("align-stack-pointer"), tr("Align Stack Pointer"), SLOT(realignSlot())), [this](QMenu*)
     {
-        return (mCsp & (sizeof(duint) - 1)) != 0;
+        return (mCsp & (mPointerSize - 1)) != 0;
     });
 
     // Modify
@@ -128,8 +152,8 @@ void CPUStack::setupContextMenu()
     });
 
     //Copy->DWORD/QWORD
-    QString ptrName = ArchValue(tr("&DWORD"), tr("&QWORD"));
-    copyMenu->addAction(makeAction(ptrName, SLOT(copyPtrColumnSlot())));
+    mCopyPointer = makeAction(mPointerSize == 4 ? tr("&DWORD") : tr("&QWORD"), SLOT(copyPtrColumnSlot()));
+    copyMenu->addAction(mCopyPointer);
 
     //Copy->Comments
     copyMenu->addAction(makeAction(tr("&Comments"), SLOT(copyCommentsColumnSlot())));
@@ -214,8 +238,10 @@ void CPUStack::setupContextMenu()
     mMenuBuilder->addAction(makeShortcutAction(DIcon("search-for"), tr("&Find Pattern..."), SLOT(findPattern()), "ActionFindPattern"));
 
     //Follow CSP
-    mMenuBuilder->addAction(makeShortcutAction(DIcon("neworigin"), ArchValue(tr("Follow E&SP"), tr("Follow R&SP")), SLOT(gotoCspSlot()), "ActionGotoOrigin"));
-    mMenuBuilder->addAction(makeShortcutAction(DIcon("cbp"), ArchValue(tr("Follow E&BP"), tr("Follow R&BP")), SLOT(gotoCbpSlot()), "ActionGotoCBP"), [](QMenu*)
+    mGotoCsp = makeShortcutAction(DIcon("neworigin"), mPointerSize == 4 ? tr("Follow E&SP") : tr("Follow R&SP"), SLOT(gotoCspSlot()), "ActionGotoOrigin");
+    mMenuBuilder->addAction(mGotoCsp);
+    mGotoCbp = makeShortcutAction(DIcon("cbp"), mPointerSize == 4 ? tr("Follow E&BP") : tr("Follow R&BP"), SLOT(gotoCbpSlot()), "ActionGotoCBP");
+    mMenuBuilder->addAction(mGotoCbp, [](QMenu*)
     {
         return DbgMemIsValidReadPtr(DbgValFromString("cbp"));
     });
@@ -256,14 +282,14 @@ void CPUStack::setupContextMenu()
     mCommonActions->build(mMenuBuilder, CommonActions::ActionMemoryMap | CommonActions::ActionDisplayType | CommonActions::ActionDump | CommonActions::ActionDumpData);
 
     //Follow in Stack
-    auto followStackName = ArchValue(tr("Follow DWORD in &Stack"), tr("Follow QWORD in &Stack"));
+    auto followStackName = mPointerSize == 4 ? tr("Follow DWORD in &Stack") : tr("Follow QWORD in &Stack");
     mFollowStack = makeAction(DIcon("stack"), followStackName, SLOT(followStackSlot()));
     mFollowStack->setShortcutContext(Qt::WidgetShortcut);
     mFollowStack->setShortcut(QKeySequence("enter"));
     mMenuBuilder->addAction(mFollowStack, [this](QMenu*)
     {
-        duint ptr;
-        if(!DbgMemRead(rvaToVa(getInitialSelection()), (unsigned char*)&ptr, sizeof(ptr)))
+        duint ptr = 0;
+        if(!DbgMemRead(rvaToVa(getInitialSelection()), (unsigned char*)&ptr, mPointerSize))
             return false;
         duint stackBegin = mMemPage->getBase();
         duint stackEnd = stackBegin + mMemPage->getSize();
@@ -271,14 +297,14 @@ void CPUStack::setupContextMenu()
     });
 
     //Follow in Disassembler
-    auto disasmIcon = DIcon(ArchValue("processor32", "processor64"));
-    mFollowDisasm = makeAction(disasmIcon, ArchValue(tr("&Follow DWORD in Disassembler"), tr("&Follow QWORD in Disassembler")), SLOT(followDisasmSlot()));
+    auto disasmIcon = DIcon(mPointerSize == 4 ? "processor32" : "processor64");
+    mFollowDisasm = makeAction(disasmIcon, mPointerSize == 4 ? tr("&Follow DWORD in Disassembler") : tr("&Follow QWORD in Disassembler"), SLOT(followDisasmSlot()));
     mFollowDisasm->setShortcutContext(Qt::WidgetShortcut);
     mFollowDisasm->setShortcut(QKeySequence("enter"));
     mMenuBuilder->addAction(mFollowDisasm, [this](QMenu*)
     {
-        duint ptr;
-        return DbgMemRead(rvaToVa(getInitialSelection()), (unsigned char*)&ptr, sizeof(ptr)) && DbgMemIsValidReadPtr(ptr);
+        duint ptr = 0;
+        return DbgMemRead(rvaToVa(getInitialSelection()), (unsigned char*)&ptr, mPointerSize) && DbgMemIsValidReadPtr(ptr);
     });
 
     //Follow PTR in Dump
@@ -428,7 +454,7 @@ QString CPUStack::paintContent(QPainter* painter, duint row, duint col, int x, i
                     if(va >= mCallstack[i].addr && va < mCallstack[i + 1].addr)
                     {
                         stackFrameBitfield |= (mCallstack[i].addr == va) ? 1 : 0;
-                        stackFrameBitfield |= (mCallstack[i + 1].addr == va + sizeof(duint)) ? 2 : 0;
+                        stackFrameBitfield |= (mCallstack[i + 1].addr == va + mPointerSize) ? 2 : 0;
                         if(stackFrameBitfield == 0)
                             stackFrameBitfield = 4;
                         party = mCallstack[i].party;
@@ -537,6 +563,7 @@ void CPUStack::wheelEvent(QWheelEvent* event)
 
 void CPUStack::stackDumpAt(duint addr, duint csp)
 {
+    configurePointerColumn(mArchitecture->pointerSize());
     if(DbgMemIsValidReadPtr(addr))
         mHistory.addVaToHistory(addr);
     mCsp = csp;
@@ -622,7 +649,7 @@ void CPUStack::disasmSelectionChanged(duint parVA)
                 if(Config()->getBool("Gui", "AutoFollowInStack"))
                 {
                     //TODO: When the stack is unaligned?
-                    stackDumpAt(arg.value & (~(sizeof(void*) - 1)), mCsp);
+                    stackDumpAt(arg.value & (~(mPointerSize - 1)), mCsp);
                 }
                 else
                 {
@@ -728,8 +755,8 @@ void CPUStack::selectionSet(const SELECTIONDATA* selection)
 }
 void CPUStack::selectionUpdatedSlot()
 {
-    duint selectedData;
-    if(mMemPage->read((byte_t*)&selectedData, getInitialSelection(), sizeof(duint)))
+    duint selectedData = 0;
+    if(mMemPage->read((byte_t*)&selectedData, getInitialSelection(), mPointerSize))
         if(DbgMemIsValidReadPtr(selectedData)) //data is a pointer
         {
             duint stackBegin = mMemPage->getBase();
@@ -753,8 +780,8 @@ void CPUStack::selectionUpdatedSlot()
 
 void CPUStack::followDisasmSlot()
 {
-    duint selectedData;
-    if(mMemPage->read((byte_t*)&selectedData, getInitialSelection(), sizeof(duint)))
+    duint selectedData = 0;
+    if(mMemPage->read((byte_t*)&selectedData, getInitialSelection(), mPointerSize))
         if(DbgMemIsValidReadPtr(selectedData)) //data is a pointer
         {
             QString addrText = ToPtrString(selectedData);
@@ -764,8 +791,8 @@ void CPUStack::followDisasmSlot()
 
 void CPUStack::followStackSlot()
 {
-    duint selectedData;
-    if(mMemPage->read((byte_t*)&selectedData, getInitialSelection(), sizeof(duint)))
+    duint selectedData = 0;
+    if(mMemPage->read((byte_t*)&selectedData, getInitialSelection(), mPointerSize))
         if(DbgMemIsValidReadPtr(selectedData)) //data is a pointer
         {
             QString addrText = ToPtrString(selectedData);
@@ -950,22 +977,23 @@ void CPUStack::dbgStateChangedSlot(DBGSTATE state)
 
 void CPUStack::copyPtrColumnSlot()
 {
-    const duint wordSize = sizeof(duint);
+    const duint wordSize = mPointerSize;
     dsint selStart = getSelectionStart();
     dsint selLen = getSelectionEnd() - selStart + 1;
     duint wordCount = selLen / wordSize;
 
-    duint* data = new duint[wordCount];
-    mMemPage->read((byte_t*)data, selStart, wordCount * wordSize);
+    std::vector<byte_t> data(wordCount * wordSize);
+    mMemPage->read(data.data(), selStart, data.size());
 
     QString clipboard;
     for(duint i = 0; i < wordCount; i++)
     {
         if(i > 0)
             clipboard += "\r\n";
-        clipboard += ToPtrString(data[i]);
+        duint value = 0;
+        memcpy(&value, data.data() + i * wordSize, wordSize);
+        clipboard += QString("%1").arg(value, int(wordSize * 2), 16, QChar('0')).toUpper();
     }
-    delete [] data;
 
     Bridge::CopyToClipboard(clipboard);
 }
@@ -973,7 +1001,7 @@ void CPUStack::copyPtrColumnSlot()
 void CPUStack::copyCommentsColumnSlot()
 {
     int commentsColumn = 2;
-    const duint wordSize = sizeof(duint);
+    const duint wordSize = mPointerSize;
     dsint selStart = getSelectionStart();
     dsint selLen = getSelectionEnd() - selStart + 1;
 

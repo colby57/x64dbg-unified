@@ -34,6 +34,7 @@
 #include "types.h"
 #include "label.h"
 #include "commandparser.h"
+#include "threadcontext.h"
 
 static DBGFUNCTIONS _dbgfunctions;
 
@@ -115,6 +116,17 @@ static int SymAutoComplete(const char* Search, char** Buffer, int MaxSymbols)
 
 void dbgfunctionsinit()
 {
+    _dbgfunctions.GetActiveExecutionMode = []()
+    {
+        ExecutionMode mode;
+        return GetActiveExecutionMode(mode) ? static_cast<unsigned char>(mode) : static_cast<unsigned char>(0xFF);
+    };
+    _dbgfunctions.GetTargetPointerSize = GetTargetPointerSize;
+    _dbgfunctions.GetExecutionModeAt = [](duint address)
+    {
+        ExecutionMode mode;
+        return GetExecutionModeAt(address, mode) ? static_cast<unsigned char>(mode) : static_cast<unsigned char>(0xFF);
+    };
     _dbgfunctions.AssembleAtEx = [](duint addr, const char* instruction, char* error, bool fillnop)
     {
         return assembleat(addr, instruction, nullptr, error, fillnop);

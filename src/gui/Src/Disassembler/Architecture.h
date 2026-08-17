@@ -12,6 +12,7 @@ public:
     virtual ~Architecture() = default;
 
     // TODO: replace this with something about address space
-    virtual bool disasm64() const = 0;
+    virtual bool disasm64(duint address = 0) const = 0;
     virtual bool addr64() const = 0;
+    virtual size_t pointerSize() const = 0;
 };

@@ -260,6 +260,7 @@ protected:
     bool mXMMModeYMMOnly; //true = only show YMM registers when the user requests to show full vector length
     bool mAlwaysShowAVX512Registers; //true = always show AVX512 registers, false = auto
     bool mAVX512RegistersShown;
+    bool mMode64;
     void autoUpdateXMMModesAndRefresh();
     dsint mCip;
     RegistersCanvas* mCanvas = nullptr;
