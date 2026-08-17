@@ -17,6 +17,8 @@ TEST_LOG_RE = re.compile(r"^\[x64dbg-test\]")
 ARTIFACT_GITIGNORE = ".gitignore"
 ARTIFACT_GITIGNORE_MARKER = "# x64dbg-test\n*"
 ABSOLUTE_CF_MARKER = "absolute_cf"
+X86_DEBUGGEE_MARKER = "x86_debuggee"
+TITANENGINE_ONLY_MARKER = "titanengine_only"
 DEBUG_ENGINE_VALUES = {
     "TitanEngine": 0,
     "GleeBug": 1,
@@ -36,6 +38,8 @@ class TestCase:
     driver: Path | None
     fallback_check: Path | None
     absolute_command_file: bool
+    x86_debuggee: bool
+    titanengine_only: bool
 
 
 @dataclass
@@ -154,10 +158,14 @@ def discover_tests(repo_root: Path, arch: str, requested: set[str], validate_run
             raise FileExistsError(f"Duplicate test id discovered: {rel}")
         if requested and rel not in requested:
             continue
+        x86_debuggee = (script.parent / X86_DEBUGGEE_MARKER).is_file()
+        if x86_debuggee and arch != "x64":
+            continue
 
         runtime_dir = runtime_root / Path(rel_dir)
         runtime_script = runtime_dir / script.name
-        debuggee = runtime_root / f"{rel_dir}.exe"
+        debuggee_root = repo_root / "bin" / "x32" / "tests" if x86_debuggee else runtime_root
+        debuggee = debuggee_root / f"{rel_dir}.exe"
         tests.append(
             TestCase(
                 rel=rel,
@@ -169,6 +177,8 @@ def discover_tests(repo_root: Path, arch: str, requested: set[str], validate_run
                 driver=variant_driver_path(script.parent, variant),
                 fallback_check=variant_check_path(script.parent, variant),
                 absolute_command_file=(script.parent / ABSOLUTE_CF_MARKER).is_file(),
+                x86_debuggee=x86_debuggee,
+                titanengine_only=(script.parent / TITANENGINE_ONLY_MARKER).is_file(),
             )
         )
         seen_rel.add(rel)
@@ -355,7 +365,14 @@ def run_test(headless: Path, test: TestCase, timeout: int, artifact_root: Path, 
     ]
     for plugin in test.plugins:
         command.extend(["-plugin", path_arg(plugin, headless_dir)])
-    command_file = str(test.runtime_script) if test.absolute_command_file else path_arg(test.runtime_script, headless_dir)
+    command_file_path = test.runtime_script
+    if test.x86_debuggee:
+        command_file_path = artifact_dir / test.runtime_script.name
+        command_file_path.write_text(
+            test.runtime_script.read_text(encoding="utf-8").replace("@DEBUGGEE@", str(test.debuggee)),
+            encoding="utf-8",
+        )
+    command_file = str(command_file_path) if test.absolute_command_file or test.x86_debuggee else path_arg(command_file_path, headless_dir)
     command.extend(
         [
             "-c",
@@ -461,8 +478,13 @@ def main() -> int:
         temporary_root = True
 
     results: list[TestResult] = []
+    unsupported = 0
     overall_success = True
     for test in tests:
+        if test.titanengine_only and args.engine != "TitanEngine":
+            print(f"UNSUPPORTED {test.rel}  reason={args.engine}_has_no_unified_WOW64_context", flush=True)
+            unsupported += 1
+            continue
         result = run_test(headless, test, args.timeout, artifact_root, args.engine, not args.console_window)
         results.append(result)
         print_test_result(result)
@@ -471,10 +493,14 @@ def main() -> int:
 
     keep_artifacts = args.keep_artifacts or not overall_success or not temporary_root
     print_results(results, artifact_root if keep_artifacts else None)
+    if unsupported:
+        print(f"Unsupported: {unsupported}")
 
     if temporary_root and not keep_artifacts and artifact_root.exists():
         remove_managed_dir(artifact_root)
 
+    if unsupported and not results:
+        return 2
     return 0 if overall_success else 1
 
 

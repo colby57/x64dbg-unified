@@ -184,6 +184,8 @@ set(X64DBG_STANDARD_TESTS
     scriptcmd_call_threads
     swbp_stale
     trace_cmd_condition
+    unified_wow64_basic
+    unified_heavens_gate
 )
 
 foreach(test_name IN LISTS X64DBG_STANDARD_TESTS)

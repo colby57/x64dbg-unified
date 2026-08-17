@@ -1,0 +1,15 @@
+settingset Events, SystemBreakpoint, 1
+settingset Events, EntryBreakpoint, 0
+init "@DEBUGGEE@"
+bp unified_wow64_basic:BasicStart
+run
+bpd unified_wow64_basic:BasicStart
+sti
+sti
+unifiedbasicassert
+sto
+unifiedbasicstepoverassert
+sti
+run
+unifiedbasicexit
+testfinalize

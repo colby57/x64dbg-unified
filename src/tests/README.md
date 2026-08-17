@@ -34,6 +34,8 @@ src/tests/<rel>/
   optional check.py
   optional check.<variant>.py
   optional absolute_cf
+  optional x86_debuggee
+  optional titanengine_only
   optional README.md
 ```
 
@@ -46,6 +48,8 @@ Conventions:
 - `driver.py` and `driver.<variant>.py` are optional Python drivers for tests that need custom process setup before headless starts
 - `check.py` and `check.<variant>.py` are optional fallback validators used by `run.py`
 - `absolute_cf` makes `run.py` pass the script path to `-cf` as an absolute path
+- `x86_debuggee` makes an x64 test use the target built under `bin/x32/tests`
+- `titanengine_only` reports the test as unsupported on other debug engines
 
 Examples:
 

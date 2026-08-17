@@ -1,0 +1,28 @@
+settingset Events, SystemBreakpoint, 1
+settingset Events, EntryBreakpoint, 0
+init "@DEBUGGEE@"
+bp unified_heavens_gate:GateStart
+run
+bpd unified_heavens_gate:GateStart
+unifiedgatecompat
+unifiedgatesetbreakpoints
+sti
+sti
+unifiedgatecompatregisters
+sti
+sti
+sti
+sti
+sti
+sti
+sti
+unifiedgatenative
+sto
+unifiedgatestepover
+run
+unifiedgatenativebp
+run
+unifiedgatereturned
+run
+unifiedgateexit
+testfinalize
