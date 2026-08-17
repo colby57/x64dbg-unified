@@ -89,31 +89,19 @@ bool GetNativeControlContext(HANDLE thread, CONTEXT & context)
 {
     memset(&context, 0, sizeof(context));
     context.ContextFlags = CONTEXT_CONTROL;
-    if(SuspendThread(thread) == DWORD(-1))
-        return false;
-    const bool success = GetThreadContext(thread, &context) != FALSE;
-    ResumeThread(thread);
-    return success;
+    return GetThreadContext(thread, &context) != FALSE;
 }
 
 bool GetWow64Context(HANDLE thread, WOW64_CONTEXT & context)
 {
     memset(&context, 0, sizeof(context));
     context.ContextFlags = WOW64_CONTEXT_ALL | WOW64_CONTEXT_EXTENDED_REGISTERS;
-    if(SuspendThread(thread) == DWORD(-1))
-        return false;
-    const bool success = Wow64GetThreadContext(thread, &context) != FALSE;
-    ResumeThread(thread);
-    return success;
+    return Wow64GetThreadContext(thread, &context) != FALSE;
 }
 
 bool SetWow64Context(HANDLE thread, WOW64_CONTEXT & context)
 {
-    if(SuspendThread(thread) == DWORD(-1))
-        return false;
-    const bool success = Wow64SetThreadContext(thread, &context) != FALSE;
-    ResumeThread(thread);
-    return success;
+    return Wow64SetThreadContext(thread, &context) != FALSE;
 }
 
 void Wow64ToTitan(const WOW64_CONTEXT & source, TITAN_ENGINE_CONTEXT_t & target)
@@ -333,8 +321,9 @@ bool GetThreadExecutionMode(HANDLE thread, ExecutionMode & mode)
         CONTEXT context;
         if(!GetNativeControlContext(thread, context))
         {
-            if(dbgisdebugging())
-                dprintf(QT_TRANSLATE_NOOP("DBG", "Could not read native thread context while determining execution mode (error %u).\n"), GetLastError());
+            const auto error = GetLastError();
+            if(dbgisdebugging() && error != ERROR_ACCESS_DENIED && error != ERROR_INVALID_HANDLE)
+                dprintf(QT_TRANSLATE_NOOP("DBG", "Could not read native thread context while determining execution mode (error %u).\n"), error);
             return false;
         }
         if(context.SegCs == Wow64CodeSelector)
