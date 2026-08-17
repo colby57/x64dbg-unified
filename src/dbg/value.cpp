@@ -5,6 +5,7 @@
  */
 
 #include "value.h"
+#include "threadcontext.h"
 #include "variable.h"
 #include "debugger.h"
 #include "console.h"
@@ -561,8 +562,43 @@ bool setflag(const char* string, bool set)
 \param string The name of the register to get. Cannot be null.
 \return The register value.
 */
+static bool IsUnavailableX64Register(const char* name)
+{
+#ifdef _WIN64
+    ExecutionMode mode;
+    if(!GetActiveExecutionMode(mode) || mode != ExecutionMode::X86)
+        return false;
+
+    const String lower = StringUtils::ToLower(name);
+    if(lower == "rax" || lower == "rbx" || lower == "rcx" || lower == "rdx" ||
+            lower == "rsi" || lower == "rdi" || lower == "rbp" || lower == "rsp" ||
+            lower == "rip" || lower == "rflags")
+        return true;
+    if(lower.size() >= 2 && lower[0] == 'r')
+    {
+        const auto suffix = lower.find_first_not_of("0123456789", 1);
+        const auto numberText = lower.substr(1, suffix - 1);
+        if(!numberText.empty())
+        {
+            const auto number = atoi(numberText.c_str());
+            if(number >= 8 && number <= 15 && (suffix == String::npos || lower.substr(suffix) == "d" || lower.substr(suffix) == "w" || lower.substr(suffix) == "b"))
+                return true;
+        }
+    }
+#else
+    (void)name;
+#endif
+    return false;
+}
+
 duint getregister(int* size, const char* string)
 {
+    if(IsUnavailableX64Register(string))
+    {
+        if(size)
+            *size = 0;
+        return 0;
+    }
     if(size)
         *size = 4;
     TitanRegister TitanIndex = UE_XMM0; // Tian register index with UE_XMM0 as invalid marker
@@ -719,7 +755,7 @@ duint getregister(int* size, const char* string)
     }
 
     if(size)
-        *size = sizeof(duint);
+        *size = GetTargetPointerSize();
     switch(string_int)
     {
     case MAKE_WORD_INTO_INT(DR0):
@@ -968,6 +1004,8 @@ duint getregister(int* size, const char* string)
 */
 bool setregister(const char* string, duint value)
 {
+    if(IsUnavailableX64Register(string))
+        return false;
     TitanRegister titanIndex = UE_XMM0;
     const int string_int = read_string_4char_ucase(string);
     switch(string_int)
@@ -1764,6 +1802,8 @@ bool valfromstring_noexpr(const char* string, duint* value, bool silent, bool ba
     }
     else if(isregister(string)) //register
     {
+        if(IsUnavailableX64Register(string))
+            return false;
         if(!DbgIsDebugging())
         {
             if(!silent)

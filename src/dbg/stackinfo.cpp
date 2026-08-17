@@ -16,6 +16,7 @@
 #include "symbolinfo.h"
 #include "debugger.h"
 #include "dbghelp_safe.h"
+#include "threadcontext.h"
 
 using SehMap = std::unordered_map<duint, STACK_COMMENT>;
 static SehMap SehCache;
@@ -75,7 +76,8 @@ bool stackcommentget(duint addr, STACK_COMMENT* comment)
 
     duint data = 0;
     memset(comment, 0, sizeof(STACK_COMMENT));
-    MemRead(addr, &data, sizeof(duint));
+    const auto pointerSize = GetTargetPointerSize();
+    MemRead(addr, &data, pointerSize);
     if(!MemIsValidReadPtr(data)) //the stack value is no pointer
         return false;
 
@@ -223,7 +225,7 @@ void stackupdatecallstack(duint csp)
     stackgetcallstack(csp, callstack, false);
 }
 
-static void stackgetsuspectedcallstack(duint csp, std::vector<CALLSTACKENTRY> & callstackVector)
+static void stackgetsuspectedcallstack(duint csp, std::vector<CALLSTACKENTRY> & callstackVector, size_t pointerSize)
 {
     duint size;
     duint base = MemFindBaseAddr(csp, &size);
@@ -231,11 +233,12 @@ static void stackgetsuspectedcallstack(duint csp, std::vector<CALLSTACKENTRY> & 
         return;
     duint end = base + size;
     size = end - csp;
-    Memory<duint*> stackdata(size);
+    Memory<byte_t*> stackdata(size);
     MemRead(csp, stackdata(), size);
-    for(duint i = csp; i < end; i += sizeof(duint))
+    for(duint i = csp; i + pointerSize <= end; i += pointerSize)
     {
-        duint data = stackdata()[(i - csp) / sizeof(duint)];
+        duint data = 0;
+        memcpy(&data, stackdata() + i - csp, pointerSize);
         duint size = 0;
         duint base = MemFindBaseAddr(data, &size);
         duint readStart = data - 16 * 4;
@@ -283,7 +286,18 @@ void stackgetcallstack(duint csp, std::vector<CALLSTACKENTRY> & callstackVector,
         return;
     }
 
-    // Gather context data
+    ExecutionMode mode;
+    if(!GetActiveExecutionMode(mode))
+        return;
+#ifdef _WIN64
+    if(mode == ExecutionMode::X86)
+    {
+        stackgetsuspectedcallstack(csp, callstackVector, 4);
+        return;
+    }
+#endif
+
+    // Gather native x64 context data.
     CONTEXT context;
     memset(&context, 0, sizeof(CONTEXT));
 
@@ -293,14 +307,17 @@ void stackgetcallstack(duint csp, std::vector<CALLSTACKENTRY> & callstackVector,
         return;
 
     if(!GetThreadContext(hActiveThread, &context))
+    {
+        ResumeThread(hActiveThread);
         return;
+    }
 
     if(ResumeThread(hActiveThread) == -1)
         return;
 
     if(ShowSuspectedCallStack)
     {
-        stackgetsuspectedcallstack(csp, callstackVector);
+        stackgetsuspectedcallstack(csp, callstackVector, sizeof(duint));
     }
     else
     {
@@ -354,7 +371,7 @@ void stackgetcallstack(duint csp, std::vector<CALLSTACKENTRY> & callstackVector,
                 CALLSTACKENTRY entry;
                 memset(&entry, 0, sizeof(CALLSTACKENTRY));
 
-                StackEntryFromFrame(&entry, (duint)frame.AddrFrame.Offset + sizeof(duint), (duint)frame.AddrPC.Offset, (duint)frame.AddrReturn.Offset);
+                StackEntryFromFrame(&entry, (duint)frame.AddrFrame.Offset + GetTargetPointerSize(), (duint)frame.AddrPC.Offset, (duint)frame.AddrReturn.Offset);
                 callstackVector.push_back(entry);
             }
             else
@@ -375,6 +392,24 @@ void stackgetcallstackbythread(HANDLE thread, CALLSTACK* callstack)
 {
     std::vector<CALLSTACKENTRY> callstackVector;
     duint csp = GetContextDataEx(thread, UE_CSP);
+    ExecutionMode mode;
+    if(!GetThreadExecutionMode(thread, mode))
+        return;
+#ifdef _WIN64
+    if(mode == ExecutionMode::X86)
+    {
+        stackgetsuspectedcallstack(csp, callstackVector, 4);
+        callstack->total = (int)callstackVector.size();
+        if(callstack->total)
+        {
+            callstack->entries = (CALLSTACKENTRY*)BridgeAlloc(callstack->total * sizeof(CALLSTACKENTRY));
+            memcpy(callstack->entries, callstackVector.data(), callstack->total * sizeof(CALLSTACKENTRY));
+        }
+        else
+            callstack->entries = nullptr;
+        return;
+    }
+#endif
     // Gather context data
     CONTEXT context;
     memset(&context, 0, sizeof(CONTEXT));
@@ -385,14 +420,17 @@ void stackgetcallstackbythread(HANDLE thread, CALLSTACK* callstack)
         return;
 
     if(!GetThreadContext(thread, &context))
+    {
+        ResumeThread(thread);
         return;
+    }
 
     if(ResumeThread(thread) == -1)
         return;
 
     if(ShowSuspectedCallStack)
     {
-        stackgetsuspectedcallstack(csp, callstackVector);
+        stackgetsuspectedcallstack(csp, callstackVector, sizeof(duint));
     }
     else
     {

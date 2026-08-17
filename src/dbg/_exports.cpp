@@ -16,6 +16,7 @@
 #include "assemble.h"
 #include "stackinfo.h"
 #include "thread.h"
+#include "threadcontext.h"
 #include "disasm_fast.h"
 #include "plugin_loader.h"
 #include "_dbgfunctions.h"
@@ -722,7 +723,13 @@ extern "C" DLL_EXPORT bool _dbg_getregdump(REGDUMP_AVX512* regdump)
     if(!GetFullContextDataEx(hActiveThread, &titcontext))
         return false;
     memset(&titcontext_AVX512, 0, sizeof(titcontext_AVX512));
+#ifdef _WIN64
+    ExecutionMode mode;
+    if(GetActiveExecutionMode(mode) && mode == ExecutionMode::X64)
+        GetAVX512Context(hActiveThread, &titcontext_AVX512);
+#else
     GetAVX512Context(hActiveThread, &titcontext_AVX512);
+#endif
 
     // NOTE: this is not thread-safe, but that's fine because lastContext is only used for GUI-related operations
     memcpy(&lastContext, &titcontext, sizeof(titcontext));

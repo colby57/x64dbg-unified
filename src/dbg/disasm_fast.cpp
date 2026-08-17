@@ -7,6 +7,7 @@
 #include "disasm_fast.h"
 #include "memory.h"
 #include "datainst_helper.h"
+#include "threadcontext.h"
 
 void fillbasicinfo(Zydis* cp, BASIC_INSTRUCTION_INFO* basicinfo, bool instrText)
 {
@@ -83,7 +84,8 @@ bool disasmfast(const unsigned char* data, duint addr, BASIC_INSTRUCTION_INFO* b
 {
     if(!data || !basicinfo)
         return false;
-    Zydis zydis;
+    ExecutionMode mode;
+    Zydis zydis(GetExecutionModeAt(addr, mode) ? mode == ExecutionMode::X64 : ArchValue(false, true));
     zydis.Disassemble(addr, data, MAX_DISASM_BUFFER);
     if(trydisasmfast(data, addr, basicinfo, zydis.Success() ? zydis.Size() : 1))
         return true;
