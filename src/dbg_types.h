@@ -40,4 +40,12 @@ typedef long long int64;
 typedef unsigned long long uint64;
 
 typedef unsigned char byte_t;
+
+#ifdef __cplusplus
+enum class ExecutionMode : unsigned char
+{
+    X86,
+    X64
+};
+#endif
 #endif //_DBG_TYPES_H_

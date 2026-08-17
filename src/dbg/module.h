@@ -75,6 +75,7 @@ struct MODINFO
     duint hash = 0; // Full module name hash
     duint entry = 0; // Entry point
     duint headerImageBase = 0; // ImageBase field in OptionalHeader
+    WORD machine = IMAGE_FILE_MACHINE_UNKNOWN;
 
     char name[MAX_MODULE_SIZE] = {}; // Module name (without extension)
     char extension[MAX_MODULE_SIZE] = {}; // File extension (including the dot)
@@ -175,3 +176,4 @@ bool ModRelocationsFromAddr(duint Address, std::vector<MODRELOCATIONINFO> & Relo
 bool ModRelocationAtAddr(duint Address, MODRELOCATIONINFO* Relocation);
 bool ModRelocationsInRange(duint Address, duint Size, std::vector<MODRELOCATIONINFO> & Relocations);
 duint ModFunctionEntryGuessFromAddr(duint Address);
+bool ModGetExecutionMode(duint Address, ExecutionMode & mode);

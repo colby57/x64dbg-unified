@@ -882,6 +882,7 @@ void GetModuleInfo(MODINFO & Info, ULONG_PTR FileMapVA)
         dprintf(QT_TRANSLATE_NOOP("DBG", "Module %s%s: invalid PE file!\n"), Info.name, Info.extension);
         return;
     }
+    Info.machine = Info.headers->FileHeader.Machine;
 
     // Get the entry point
     duint moduleOEP = HEADER_FIELD(Info.headers, AddressOfEntryPoint);
@@ -1226,6 +1227,21 @@ MODINFO* ModInfoFromAddr(duint Address)
         return nullptr;
 
     return found->second.get();
+}
+
+bool ModGetExecutionMode(duint Address, ExecutionMode & mode)
+{
+    SHARED_ACQUIRE(LockModules);
+    const auto module = ModInfoFromAddr(Address);
+    if(module == nullptr)
+        return false;
+    if(module->machine == IMAGE_FILE_MACHINE_I386)
+        mode = ExecutionMode::X86;
+    else if(module->machine == IMAGE_FILE_MACHINE_AMD64)
+        mode = ExecutionMode::X64;
+    else
+        return false;
+    return true;
 }
 
 bool ModNameFromAddr(duint Address, char* Name, bool Extension)

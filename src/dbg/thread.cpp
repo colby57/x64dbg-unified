@@ -8,6 +8,7 @@
 #include "memory.h"
 #include "threading.h"
 #include "debugger.h"
+#include "threadcontext.h"
 
 static std::unordered_map<DWORD, THREADINFO> threadList;
 static std::unordered_map<DWORD, THREADWAITREASON> threadWaitReasons;
@@ -50,6 +51,7 @@ void ThreadCreate(CREATE_THREAD_DEBUG_INFO* CreateThread)
 
 void ThreadExit(DWORD ThreadId)
 {
+    ForgetThreadExecutionMode(ThreadId);
     EXCLUSIVE_ACQUIRE(LockThreads);
 
     // Erase element using native functions
@@ -66,6 +68,7 @@ void ThreadExit(DWORD ThreadId)
 
 void ThreadClear()
 {
+    ClearThreadExecutionModes();
     EXCLUSIVE_ACQUIRE(LockThreads);
 
     // Empty the array

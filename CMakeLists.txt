@@ -405,6 +405,8 @@ set(dbg_SOURCES
 	"src/dbg/testing.h"
 	"src/dbg/thread.cpp"
 	"src/dbg/thread.h"
+	"src/dbg/threadcontext.cpp"
+	"src/dbg/threadcontext.h"
 	"src/dbg/threading.cpp"
 	"src/dbg/threading.h"
 	"src/dbg/types.cpp"
