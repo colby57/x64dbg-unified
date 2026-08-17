@@ -306,7 +306,9 @@ bool GetThreadExecutionMode(HANDLE thread, ExecutionMode & mode)
     if(IsWow64Target())
     {
         const auto debugData = GetDebugData();
-        const auto threadId = thread == hActiveThread && debugData != nullptr ? debugData->dwThreadId : ThreadGetId(thread);
+        auto threadId = ::GetThreadId(thread);
+        if(!threadId && thread == hActiveThread && debugData != nullptr)
+            threadId = debugData->dwThreadId;
         if(threadId && debugData != nullptr && threadId == debugData->dwThreadId)
         {
             std::lock_guard<std::mutex> lock(threadModesMutex);
