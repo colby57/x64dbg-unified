@@ -12,6 +12,7 @@
 #include "TraceRecord.h"
 #include "handle.h"
 #include "thread.h"
+#include "threadcontext.h"
 #include "GetPeArch.h"
 #include "database.h"
 #include "exception.h"
@@ -26,7 +27,8 @@ static bool isInt3Exception()
     auto exceptionAddress = (duint)getLastExceptionInfo().ExceptionRecord.ExceptionAddress;
     unsigned char data[MAX_DISASM_BUFFER];
     MemRead(exceptionAddress, data, sizeof(data));
-    Zydis zydis;
+    ExecutionMode mode;
+    Zydis zydis(GetActiveExecutionMode(mode) && mode == ExecutionMode::X64);
     return zydis.Disassemble(exceptionAddress, data) && zydis.IsInt3();
 }
 
@@ -140,17 +142,12 @@ bool cbDebugInit(int argc, char* argv[])
     case PeArch::Invalid:
         dputs(QT_TRANSLATE_NOOP("DBG", "Invalid PE file!"));
         return false;
-#ifdef _WIN64
-    case PeArch::Native86:
-    case PeArch::Dotnet86:
-    case PeArch::DotnetAnyCpuPrefer32:
-        dputs(QT_TRANSLATE_NOOP("DBG", "Use x32dbg to debug this file!"));
-#else // x86
+#ifndef _WIN64
     case PeArch::Native64:
     case PeArch::Dotnet64:
         dputs(QT_TRANSLATE_NOOP("DBG", "Use x64dbg to debug this file!"));
-#endif // _WIN64
         return false;
+#endif // !_WIN64
     default:
         break;
     }
@@ -293,15 +290,13 @@ bool cbDebugAttach(int argc, char* argv[])
         dputs(QT_TRANSLATE_NOOP("DBG", "IsWow64Process failed!"));
         return false;
     }
+#ifndef _WIN64
     if(meow64 != wow64)
     {
-#ifdef _WIN64
-        dputs(QT_TRANSLATE_NOOP("DBG", "Use x32dbg to debug this process!"));
-#else
         dputs(QT_TRANSLATE_NOOP("DBG", "Use x64dbg to debug this process!"));
-#endif // _WIN64
         return false;
     }
+#endif // !_WIN64
 
     if(!GetFileNameFromProcessHandle(hProcess, szDebuggeePath, _countof(szDebuggeePath)))
     {
@@ -579,7 +574,8 @@ bool cbDebugStepOver(int argc, char* argv[])
     auto history = history_clear;
     if(steprepeat == 1)
     {
-        Zydis zydis;
+        ExecutionMode mode;
+        Zydis zydis(GetActiveExecutionMode(mode) && mode == ExecutionMode::X64);
         disasm(zydis, GetContextDataEx(hActiveThread, UE_CIP));
         if(!zydis.IsBranchType(Zydis::BTCallSem) && !IsRepeated(zydis))
             history = history_record;

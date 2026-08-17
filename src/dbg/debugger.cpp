@@ -5,6 +5,7 @@
  */
 
 #include "debugger.h"
+#include "threadcontext.h"
 #include "console.h"
 #include "memory.h"
 #include "threading.h"
@@ -1433,7 +1434,8 @@ void cbRtrStep()
 #endif //_WIN64
                )
         {
-            Zydis zydis;
+            ExecutionMode mode;
+            Zydis zydis(GetActiveExecutionMode(mode) && mode == ExecutionMode::X64);
             if(zydis.Disassemble(cip, data) && zydis.IsRet())
                 reachedReturn = true;
         }
@@ -2225,6 +2227,7 @@ static void cbException(EXCEPTION_DEBUG_INFO* ExceptionData)
     PLUG_CB_EXCEPTION callbackInfo;
     callbackInfo.Exception = ExceptionData;
     unsigned int ExceptionCode = ExceptionData->ExceptionRecord.ExceptionCode;
+
     GuiSetLastException(ExceptionCode);
     lastExceptionInfo = *ExceptionData;
 
@@ -2349,6 +2352,17 @@ static void cbDebugEvent(DEBUG_EVENT* DebugEvent)
 {
     nextContinueStatus = DBG_EXCEPTION_NOT_HANDLED;
     hActiveThread = ThreadGetHandle(GetDebugData()->dwThreadId);
+    ForgetThreadExecutionMode(DebugEvent->dwThreadId);
+#ifdef _WIN64
+    if(DebugEvent->dwDebugEventCode == EXCEPTION_DEBUG_EVENT)
+    {
+        constexpr unsigned int StatusWx86SingleStep = 0x4000001E;
+        constexpr unsigned int StatusWx86Breakpoint = 0x4000001F;
+        const auto code = DebugEvent->u.Exception.ExceptionRecord.ExceptionCode;
+        if(code == StatusWx86SingleStep || code == StatusWx86Breakpoint)
+            SetThreadExecutionMode(DebugEvent->dwThreadId, ExecutionMode::X86);
+    }
+#endif
     if(DebugEvent->dwDebugEventCode == EXCEPTION_DEBUG_EVENT)
         dwAttachMainThread = 0; //an exception makes the active thread meaningful, stop overriding the pause target
     InterlockedIncrement((volatile long*)&DbgEvents);
@@ -2595,8 +2609,10 @@ bool dbglistprocesses(std::vector<PROCESSENTRY32>* infoList, std::vector<std::st
         BOOL wow64 = false, mewow64 = false;
         if(!IsWow64Process(hProcess, &wow64) || !IsWow64Process(GetCurrentProcess(), &mewow64))
             continue;
+#ifndef _WIN64
         if((mewow64 && !wow64) || (!mewow64 && wow64))
             continue;
+#endif // !_WIN64
         char szExePath[MAX_PATH] = "";
         if(GetFileNameFromProcessHandle(hProcess, szExePath, _countof(szExePath)))
             strcpy_s(pe32.szExeFile, szExePath);
@@ -3164,15 +3180,13 @@ static void debugLoopFunction(INIT_STRUCT* init)
             StopDebug();
             return;
         }
+#ifndef _WIN64
         if((mewow64 && !wow64) || (!mewow64 && wow64))
         {
-#ifdef _WIN64
-            dputs(QT_TRANSLATE_NOOP("DBG", "Use x32dbg to debug this process!"));
-#else
             dputs(QT_TRANSLATE_NOOP("DBG", "Use x64dbg to debug this process!"));
-#endif // _WIN64
             return;
         }
+#endif // !_WIN64
 
         //set script variables
         varset("$pid", fdProcessInfo->dwProcessId, true);
@@ -3435,6 +3449,12 @@ void StepIntoWow64(TITANCBSTEP callback)
     }
     else
     {
+#ifdef _WIN64
+        ExecutionMode mode;
+        duint flags = 0;
+        if(GetActiveExecutionMode(mode) && mode == ExecutionMode::X86 && GetRegister(hActiveThread, UE_CFLAGS, flags))
+            SetRegister(hActiveThread, UE_CFLAGS, flags | 0x100);
+#endif
         StepInto(callback);
     }
 }
@@ -3447,7 +3467,25 @@ void StepOverWrapper(TITANCBSTEP callback)
     }
     else
     {
+#ifdef _WIN64
+        ExecutionMode mode;
+        if(GetActiveExecutionMode(mode) && mode == ExecutionMode::X64)
+        {
+            StepOver(callback);
+            return;
+        }
+        unsigned char data[MAX_DISASM_BUFFER] = {};
+        const auto cip = GetInstructionPointer(hActiveThread);
+        Zydis zydis(false);
+        if(MemRead(cip, data, sizeof(data)) && zydis.Disassemble(cip, data) &&
+                (zydis.IsBranchType(Zydis::BTCallSem) ||
+                 (zydis.GetInstr()->info.attributes & (ZYDIS_ATTRIB_HAS_REP | ZYDIS_ATTRIB_HAS_REPZ | ZYDIS_ATTRIB_HAS_REPNZ))) &&
+                SetBPX(cip + zydis.Size(), UE_SINGLESHOOT, callback))
+            return;
+        StepIntoWow64(callback);
+#else
         StepOver(callback);
+#endif
     }
 }
 
