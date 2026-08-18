@@ -81,15 +81,23 @@ bool AssertNative(int, char**)
     REGDUMP_AVX512 registers;
     BASIC_INSTRUCTION_INFO instruction = {};
     BYTE opcode[16] = {};
+    duint gateSlot = 0;
+    DWORD gate = 0;
+    const bool readGate = functions->ValFromString("unified_heavens_gate:gGateCode", &gateSlot) &&
+                          DbgMemRead(gateSlot, &gate, sizeof(gate));
+    const bool readRegisters = ReadRegisters(registers);
+    const bool readOpcode = readRegisters && DbgMemRead(registers.regcontext.cip, opcode, sizeof(opcode));
+    const bool disassembled = readOpcode && functions->DisasmFast(opcode, registers.regcontext.cip, &instruction);
+    const auto branchDestination = readRegisters ? DbgGetBranchDestination(registers.regcontext.cip) : 0;
     const bool ok = functions->GetActiveExecutionMode && functions->GetActiveExecutionMode() == 1 &&
                     functions->GetTargetPointerSize && functions->GetTargetPointerSize() == 8 &&
-                    ReadRegisters(registers) &&
+                    readGate && readRegisters &&
                     registers.regcontext.cax == 0x0102030405060708ULL &&
                     registers.regcontext.r8 == 0x1122334455667788ULL &&
-                    registers.regcontext.r15 == 0x99AABBCCDDEEFF00ULL &&
-                    DbgMemRead(registers.regcontext.cip, opcode, sizeof(opcode)) && opcode[0] == 0xE8 &&
-                    functions->DisasmFast(opcode, registers.regcontext.cip, &instruction) && instruction.size == 5 && instruction.call;
-    return _plugin_testassert(ok, "native mode exposes full x64 registers and decodes the x64 call");
+                    registers.regcontext.r15 == gate + 59 &&
+                    readOpcode && opcode[0] == 0x41 && disassembled && instruction.size == 4 && instruction.call &&
+                    branchDestination == gate + 39;
+    return _plugin_testassert(ok, "native mode resolves the x64 indirect qword call");
 #endif
 }
 
@@ -99,7 +107,7 @@ bool AssertNativeStepOver(int, char**)
     REGDUMP_AVX512 registers;
     BYTE opcode = 0;
     const bool ok = functions->GetActiveExecutionMode && functions->GetActiveExecutionMode() == 1 &&
-                    ReadRegisters(registers) && DbgMemRead(registers.regcontext.cip, &opcode, sizeof(opcode)) && opcode == 0xEB;
+                    ReadRegisters(registers) && DbgMemRead(registers.regcontext.cip, &opcode, sizeof(opcode)) && opcode == 0x90;
     return _plugin_testassert(ok, "x64 Step Over stopped at the instruction following the call");
 }
 
@@ -118,10 +126,19 @@ bool AssertReturned(int, char**)
 {
     const auto functions = DbgFunctions();
     REGDUMP_AVX512 registers;
+    BASIC_INSTRUCTION_INFO instruction = {};
+    BYTE opcode[16] = {};
+    duint gateSlot = 0;
+    DWORD gate = 0;
     const bool ok = functions->GetActiveExecutionMode && functions->GetActiveExecutionMode() == 0 &&
                     functions->GetTargetPointerSize && functions->GetTargetPointerSize() == 4 &&
-                    ReadRegisters(registers) && DWORD(registers.regcontext.cax) == 0xA1B2C3D4;
-    return _plugin_testassert(ok, "far return restored x86 mode and EAX");
+                    functions->ValFromString("unified_heavens_gate:gGateCode", &gateSlot) &&
+                    DbgMemRead(gateSlot, &gate, sizeof(gate)) &&
+                    ReadRegisters(registers) && DWORD(registers.regcontext.cax) == 0xA1B2C3D4 &&
+                    functions->GetExecutionModeAt && functions->GetExecutionModeAt(gate) == 1 &&
+                    DbgMemRead(gate, opcode, sizeof(opcode)) &&
+                    functions->DisasmFast(opcode, gate, &instruction) && instruction.size == 2;
+    return _plugin_testassert(ok, "far return preserves the observed x64 listing mode");
 }
 
 bool AssertExit(int, char**)

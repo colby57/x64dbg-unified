@@ -814,9 +814,12 @@ extern "C" DLL_EXPORT int _dbg_getbplist(BPXTYPE type, BPMAP* bpmap)
 extern "C" DLL_EXPORT duint _dbg_getbranchdestination(duint addr)
 {
     unsigned char data[MAX_DISASM_BUFFER];
-    if(!MemIsValidReadPtr(addr, true) || !MemRead(addr, data, sizeof(data)))
+    if(!MemRead(addr, data, sizeof(data)))
         return 0;
-    Zydis zydis;
+    ExecutionMode mode;
+    if(!GetExecutionModeAt(addr, mode))
+        mode = ArchValue(ExecutionMode::X86, ExecutionMode::X64);
+    Zydis zydis(mode == ExecutionMode::X64);
     if(!zydis.Disassemble(addr, data))
         return 0;
     if(zydis.IsBranchType(Zydis::BTJmp | Zydis::BTCall | Zydis::BTLoop | Zydis::BTXbegin))
@@ -825,26 +828,25 @@ extern "C" DLL_EXPORT duint _dbg_getbranchdestination(duint addr)
         {
             switch(reg)
             {
-#ifndef _WIN64 //x32
             case ZYDIS_REGISTER_EAX:
-                return lastContext.cax;
+                return DWORD(lastContext.cax);
             case ZYDIS_REGISTER_EBX:
-                return lastContext.cbx;
+                return DWORD(lastContext.cbx);
             case ZYDIS_REGISTER_ECX:
-                return lastContext.ccx;
+                return DWORD(lastContext.ccx);
             case ZYDIS_REGISTER_EDX:
-                return lastContext.cdx;
+                return DWORD(lastContext.cdx);
             case ZYDIS_REGISTER_EBP:
-                return lastContext.cbp;
+                return DWORD(lastContext.cbp);
             case ZYDIS_REGISTER_ESP:
-                return lastContext.csp;
+                return DWORD(lastContext.csp);
             case ZYDIS_REGISTER_ESI:
-                return lastContext.csi;
+                return DWORD(lastContext.csi);
             case ZYDIS_REGISTER_EDI:
-                return lastContext.cdi;
+                return DWORD(lastContext.cdi);
             case ZYDIS_REGISTER_EIP:
-                return lastContext.cip;
-#else //x64
+                return DWORD(lastContext.cip);
+#ifdef _WIN64
             case ZYDIS_REGISTER_RAX:
                 return lastContext.cax;
             case ZYDIS_REGISTER_RBX:
@@ -879,18 +881,34 @@ extern "C" DLL_EXPORT duint _dbg_getbranchdestination(duint addr)
                 return lastContext.r14;
             case ZYDIS_REGISTER_R15:
                 return lastContext.r15;
-#endif //_WIN64
+#endif // _WIN64
             default:
                 return 0;
             }
         });
         if(zydis.OpCount() && zydis[0].type == ZYDIS_OPERAND_TYPE_MEMORY)
         {
-            auto const tebseg = ArchValue(ZYDIS_REGISTER_FS, ZYDIS_REGISTER_GS);
+            const auto tebseg = mode == ExecutionMode::X86 ? ZYDIS_REGISTER_FS : ZYDIS_REGISTER_GS;
             if(zydis[0].mem.segment == tebseg)
-                opValue += duint(GetTEBLocation(hActiveThread));
-            if(MemRead(opValue, &opValue, sizeof(opValue)))
-                return opValue;
+            {
+                if(mode == ExecutionMode::X86)
+                    opValue += ThreadGetLocalBase(GetDebugData()->dwThreadId);
+                else
+                    opValue += duint(GetTEBLocation(hActiveThread));
+            }
+            if(zydis[0].size == 32)
+            {
+                DWORD destination = 0;
+                if(MemRead(opValue, &destination, sizeof(destination)))
+                    return destination;
+            }
+#ifdef _WIN64
+            else if(zydis[0].size == 64)
+            {
+                if(MemRead(opValue, &opValue, sizeof(opValue)))
+                    return opValue;
+            }
+#endif // _WIN64
         }
         else
             return opValue;
@@ -899,8 +917,16 @@ extern "C" DLL_EXPORT duint _dbg_getbranchdestination(duint addr)
     {
         auto csp = lastContext.csp;
         duint dest = 0;
-        if(MemRead(csp, &dest, sizeof(dest)))
+        if(mode == ExecutionMode::X86)
+        {
+            DWORD destination = 0;
+            if(MemRead(csp, &destination, sizeof(destination)))
+                return destination;
+        }
+#ifdef _WIN64
+        else if(MemRead(csp, &dest, sizeof(dest)))
             return dest;
+#endif // _WIN64
     }
     return 0;
 }

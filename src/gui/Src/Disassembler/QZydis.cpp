@@ -63,9 +63,6 @@ ulong QZydis::DisassembleBack(const uint8_t* data, duint base, duint size, duint
     uint abuf[128], addr, back, cmdsize;
     const unsigned char* pdata;
 
-    // Reset Disasm Structure
-    Zydis zydis(mArchitecture->disasm64());
-
     auto GetTraceRecordByteType = DbgFunctions()->GetTraceRecordByteType;
 
     // Check if the pointer is not null
@@ -96,6 +93,8 @@ ulong QZydis::DisassembleBack(const uint8_t* data, duint base, duint size, duint
         back = ip;
 
     addr = ip - back;
+    auto disasm64 = mArchitecture->disasm64(base + addr);
+    Zydis zydis(disasm64);
     if(mCodeFoldingManager && mCodeFoldingManager->isFolded(addr + base))
     {
         duint newback = mCodeFoldingManager->getFoldBegin(addr + base);
@@ -120,6 +119,12 @@ ulong QZydis::DisassembleBack(const uint8_t* data, duint base, duint size, duint
         }
         else
         {
+            const auto currentDisasm64 = mArchitecture->disasm64(base + addr);
+            if(currentDisasm64 != disasm64)
+            {
+                disasm64 = currentDisasm64;
+                zydis.Reset(disasm64);
+            }
             // Check byte type
             bool hasByteType = false;
             if(mUseRunTrace)
@@ -175,9 +180,6 @@ ulong QZydis::DisassembleNext(const uint8_t* data, duint base, duint size, duint
     uint cmdsize;
     const unsigned char* pdata;
 
-    // Reset Disasm Structure
-    Zydis zydis(mArchitecture->disasm64());
-
     if(data == NULL)
         return 0;
 
@@ -191,6 +193,8 @@ ulong QZydis::DisassembleNext(const uint8_t* data, duint base, duint size, duint
 
     pdata = data + ip;
     size -= ip;
+    auto disasm64 = mArchitecture->disasm64(base + ip);
+    Zydis zydis(disasm64);
 
     for(i = 0; i < n && size > 0; i++)
     {
@@ -200,6 +204,12 @@ ulong QZydis::DisassembleNext(const uint8_t* data, duint base, duint size, duint
         }
         else
         {
+            const auto currentDisasm64 = mArchitecture->disasm64(base + ip);
+            if(currentDisasm64 != disasm64)
+            {
+                disasm64 = currentDisasm64;
+                zydis.Reset(disasm64);
+            }
             bool hasByteType = false;
             if(mUseRunTrace)
             {
@@ -254,6 +264,7 @@ Instruction_t QZydis::DisassembleAt(const uint8_t* data, duint size, duint origB
     int len = mTokenizer.Size();
 
     const auto & zydis = mTokenizer.GetZydis();
+    const auto disasm64 = mArchitecture->disasm64(origBase + origInstRVA);
     bool success = zydis.Success();
 
     auto branchType = Instruction_t::None;
@@ -295,7 +306,7 @@ Instruction_t QZydis::DisassembleAt(const uint8_t* data, duint size, duint origB
     regInfo[ZYDIS_REGISTER_RFLAGS] = Zydis::RAINone;
     regInfo[ZYDIS_REGISTER_EFLAGS] = Zydis::RAINone;
     regInfo[ZYDIS_REGISTER_FLAGS]  = Zydis::RAINone;
-    regInfo[mArchitecture->disasm64() ? ZYDIS_REGISTER_RIP : ZYDIS_REGISTER_EIP] = Zydis::RAINone;
+    regInfo[disasm64 ? ZYDIS_REGISTER_RIP : ZYDIS_REGISTER_EIP] = Zydis::RAINone;
 
     inst.regsReferenced.reserve(ZYDIS_REGISTER_MAX_VALUE + 21);
     for(int i = ZYDIS_REGISTER_NONE; i <= ZYDIS_REGISTER_MAX_VALUE; ++i)
@@ -326,7 +337,7 @@ Instruction_t QZydis::DisassembleAt(const uint8_t* data, duint size, duint origB
         };
 #define info(reg, type) inst.regsReferenced.emplace_back(#reg, type)
 
-        if(mArchitecture->disasm64())
+        if(disasm64)
         {
             // https://docs.microsoft.com/en-us/cpp/build/x64-software-conventions
             info(rax, Volatile);

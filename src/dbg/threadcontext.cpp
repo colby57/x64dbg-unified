@@ -5,6 +5,7 @@
 #include "module.h"
 #include "thread.h"
 
+#include <map>
 #include <mutex>
 
 namespace
@@ -13,7 +14,54 @@ namespace
 constexpr WORD Wow64CodeSelector = 0x23;
 constexpr WORD NativeCodeSelector = 0x33;
 std::unordered_map<DWORD, ExecutionMode> threadModes;
+std::map<duint, ExecutionMode> addressModes;
 std::mutex threadModesMutex;
+
+constexpr duint PageSize = 0x1000;
+
+duint PageBase(duint address)
+{
+    return address & ~(PageSize - 1);
+}
+
+bool FindAddressModeLocked(duint address, ExecutionMode & mode)
+{
+    const auto page = PageBase(address);
+    auto upper = addressModes.lower_bound(address);
+    if(upper != addressModes.end() && upper->first == address)
+    {
+        mode = upper->second;
+        return true;
+    }
+
+    const auto hasUpper = upper != addressModes.end() && PageBase(upper->first) == page;
+    auto lower = upper;
+    const auto hasLower = lower != addressModes.begin() && PageBase((--lower)->first) == page;
+    if(!hasLower && !hasUpper)
+        return false;
+    if(hasLower && (!hasUpper || address - lower->first <= upper->first - address))
+        mode = lower->second;
+    else
+        mode = upper->second;
+    return true;
+}
+
+void RememberAddressMode(duint address, ExecutionMode mode)
+{
+    if(!address)
+        return;
+    std::lock_guard<std::mutex> lock(threadModesMutex);
+    ExecutionMode rememberedMode;
+    if(FindAddressModeLocked(address, rememberedMode) && rememberedMode == mode)
+        return;
+    addressModes[address] = mode;
+}
+
+bool FindAddressMode(duint address, ExecutionMode & mode)
+{
+    std::lock_guard<std::mutex> lock(threadModesMutex);
+    return FindAddressModeLocked(address, mode);
+}
 #endif
 
 template<typename T>
@@ -353,7 +401,28 @@ bool GetThreadExecutionMode(HANDLE thread, ExecutionMode & mode)
 
 bool GetActiveExecutionMode(ExecutionMode & mode)
 {
-    return hActiveThread != nullptr && GetThreadExecutionMode(hActiveThread, mode);
+    if(hActiveThread == nullptr || !GetThreadExecutionMode(hActiveThread, mode))
+        return false;
+#ifdef _WIN64
+    if(IsWow64Target())
+    {
+        duint instructionPointer = 0;
+        if(mode == ExecutionMode::X86)
+        {
+            WOW64_CONTEXT context;
+            if(GetWow64Context(hActiveThread, context))
+                instructionPointer = context.Eip;
+        }
+        else
+        {
+            CONTEXT context;
+            if(GetNativeControlContext(hActiveThread, context))
+                instructionPointer = context.Rip;
+        }
+        RememberAddressMode(instructionPointer, mode);
+    }
+#endif
+    return true;
 }
 
 bool GetExecutionModeAt(duint address, ExecutionMode & mode)
@@ -370,6 +439,8 @@ bool GetExecutionModeAt(duint address, ExecutionMode & mode)
         mode = activeMode;
         return true;
     }
+    if(FindAddressMode(address, mode))
+        return true;
     if(ModGetExecutionMode(address, mode))
         return true;
     if(hasActiveMode)
@@ -502,6 +573,7 @@ void ClearThreadExecutionModes()
 #ifdef _WIN64
     std::lock_guard<std::mutex> lock(threadModesMutex);
     threadModes.clear();
+    addressModes.clear();
 #endif
 }
 
