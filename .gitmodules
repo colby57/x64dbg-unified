@@ -7,7 +7,7 @@
 	shallow = true
 [submodule "src/third_party/TitanEngine"]
 	path = src/third_party/TitanEngine
-	url = ../../x64dbg/TitanEngine
+	url = https://github.com/colby57/TitanEngine.git
 [submodule "src/third_party/GleeBug"]
 	path = src/third_party/GleeBug
 	url = ../../x64dbg/GleeBug
